@@ -3,6 +3,10 @@
 */
 
 #include <LiquidCrystal.h>
+#include <Matter.h>
+#include <MatterLightbulb.h>
+
+MatterLightbulb matter_socket;
 
 /* LCD Pins*/
 const int rs = 12, en = 11, d4 = 10, d5 = 9, d6 = 8, d7 = 7;
@@ -15,7 +19,9 @@ void inline Relay_Init(void) {pinMode(RELAY_PIN, OUTPUT);}
 void inline Relay_Enable_Output(void) {digitalWrite(RELAY_PIN, LOW);}
 void inline Relay_Disable_Output(void) {digitalWrite(RELAY_PIN, HIGH);}
 
-#define CURRENT_SENS_LOG_ENABLE   (1)
+
+/* Current Sensor */
+#define CURRENT_SENS_LOG_ENABLE   (0)
 #define CURRENT_SAMPLES           (20)
 #define AREF_VOLTAGE              (3.3)
 #define ADC_RESOLUTION            (4096.0)
@@ -36,6 +42,34 @@ void setup() {
 
   Serial.begin(115200);
 
+  Matter.begin();
+  matter_socket.begin();
+
+
+  Serial.println("Matter Socket");
+
+  if (!Matter.isDeviceCommissioned()) {
+    Serial.println("Matter device is not commissioned");
+    Serial.println("Commission it to your Matter hub with the manual pairing code or QR code");
+    Serial.printf("Manual pairing code: %s\n", Matter.getManualPairingCode().c_str());
+    Serial.printf("QR code URL: %s\n", Matter.getOnboardingQRCodeUrl().c_str());
+  }
+  while (!Matter.isDeviceCommissioned()) {
+    delay(200);
+  }
+
+  Serial.println("Waiting for Thread network...");
+  while (!Matter.isDeviceThreadConnected()) {
+    delay(200);
+  }
+  Serial.println("Connected to Thread network");
+
+  Serial.println("Waiting for Matter device discovery...");
+  while (!matter_socket.is_online()) {
+    delay(200);
+  }
+  Serial.println("Matter device is now online");
+
 }
 
 void loop() {
@@ -46,7 +80,22 @@ void loop() {
   lcd.print(Calculate_Current(), 3);
   lcd.print(" A");
 
-  Relay_Enable_Output();
+  static bool matter_socket_last_state = false;
+  bool matter_socket_current_state = matter_socket.get_onoff();
+
+  // If the current state is ON and the previous was OFF - turn on the Power
+  if (matter_socket_current_state && !matter_socket_last_state) {
+    matter_socket_last_state = matter_socket_current_state;
+    Relay_Enable_Output();
+    Serial.println("Power ON");
+  }
+
+  // If the current state is OFF and the previous was ON - turn off the Power
+  if (!matter_socket_current_state && matter_socket_last_state) {
+    matter_socket_last_state = matter_socket_current_state;
+    Relay_Disable_Output();
+    Serial.println("Power OFF");
+  }
 
   delay(500);
 
