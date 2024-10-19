@@ -130,6 +130,11 @@ float Calculate_Current(void)
   Serial.println(current);
 #endif 
 
+  /* Set the cut low current */
+  if (current < 0.02)
+  {
+    current = 0.0;
+  }
   return current;
 }
 
